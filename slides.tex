@@ -1,0 +1,337 @@
+\documentclass[t]{beamer}
+% \usetheme{Luebeck}
+% \usetheme{Malmoe}
+\usetheme{default}
+
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc} % this is needed for german umlauts
+\usepackage[english]{babel} % this is needed for german umlauts
+\usepackage[T1]{fontenc}    % this is needed for correct output 
+                            % of umlauts in pdf
+\usepackage{xcolor, colortbl}
+\usepackage{listings}
+
+\setbeamersize{text margin left=10pt}
+
+\title{Valores nulos em containers}
+\subtitle{Uma solução genérica para usar sentinelas como valores nulos}
+\subject{C++}
+\date{}
+
+\begin{document}
+
+  \lstset{language=C++,
+    basicstyle=\small,
+    keywordstyle=\color{blue}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{gray}\ttfamily,
+    morecomment=[l][\color{magenta}]{\#}
+  }
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Problema}
+  Como expressar nulos em um container de valores escalares?
+
+  \begin{onlyenv}<1-2>
+  \begin{lstlisting}[escapeinside=`']
+    vector<double> {
+      30.0,
+      `\only<1>{\alert{?? /*null*/},}'`\only<2>{\alert{numeric\_limits::quiet\_NaN()},}'
+      33.5
+    };
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{onlyenv}<2->
+    \begin{itemize}
+    \item{Uso de NaN(not a number)}
+    \end{itemize}
+  \end{onlyenv}
+
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Dificuldades}
+  Tipo do valor não expressa a possibilidade de ausência de valor:
+  \begin{lstlisting}[escapeinside=`']
+    vector<`\alert{double}'> {
+      30.0,
+      numeric_limits<double>::quiet_NaN(),
+      33.5
+    };
+  \end{lstlisting}
+
+  % \begin{itemize}
+  % \item{Tipo do valor não expressa nulidade}
+  % \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Dificuldades}
+  Programação pouco segura para manipular o valor:
+  \begin{lstlisting}[escapeinside=`']
+    auto vec = vector<double> {
+      30.0,
+      numeric_limits<double>::quiet_NaN(),
+      33.5
+    };
+  \end{lstlisting}
+
+  \pause
+    
+  \begin{lstlisting}[escapeinside=`']
+    //precondition: value eh um valor valido
+    void use_value(double value) { /*...*/ }
+  \end{lstlisting}
+
+  \pause
+
+  \begin{onlyenv}<3-4>
+  \begin{lstlisting}[escapeinside=`']
+    use_value(vec[i]); `\only<4->{\alert{//Bug em runtime}}'
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{onlyenv}<5->
+  \begin{lstlisting}[escapeinside=`']
+    if (`\alert{!isnan(vec[i])}')
+      use_value(vec[i]);
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{itemize}
+  \item<6->{O compilador não me ajuda, é necessário lembrar uso de isnan()}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Dificuldades}
+  \begin{itemize}
+    \item<1->{Não existe NaN para integrais}
+    \item<2->{É necessário escolher um valor válido do conjunto de valores}
+    \item<3->{O valor escolhido pode não funcionar para todos os contextos do software}
+  \end{itemize}
+
+  \begin{visibleenv}<4->
+  \begin{lstlisting}[escapeinside=`']
+    auto vec_1 = vector<unsigned char> {
+      145,
+      numeric_limits<unsigned char>::max(),
+      50
+    };
+  \end{lstlisting}
+  \end{visibleenv}
+
+  \begin{visibleenv}<5->
+  \begin{lstlisting}[escapeinside=`']
+    auto vec_2 = vector<unsigned char> {
+      255,
+      numeric_limits<unsigned char>::min(),
+      89
+    };
+  \end{lstlisting}
+  \end{visibleenv}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Dificuldades}
+  Posso misturar valores nulos diferentes de containers do mesmo tipo:
+  \begin{lstlisting}[escapeinside=`']
+    //precondition: value eh um valor valido
+    void use_value(unsigned char value) { /*...*/ }
+  \end{lstlisting}
+
+  \begin{onlyenv}<1>
+  \begin{lstlisting}
+    auto null = numeric_limits<unsigned char>::max();
+    if (vec_1[i] != null)
+      use_value(vec_1[i])
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{onlyenv}<2->
+  \begin{lstlisting}[escapeinside=`']
+    auto null = numeric_limits<unsigned char>::`\alert{min}'();
+    if (vec_1[i] != null)
+      use_value(vec_1[i]) `\only<3->{\alert{//Bug em runtime}}'
+  \end{lstlisting}
+  \end{onlyenv}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Dificuldades}
+  \begin{itemize}
+    \item<1->{Baixa expressividade}
+    \item<2->{O compilador não ajuda a verificar nulos}
+    \item<3->{Programador pode misturar valores nulos}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Boost.Optional}
+  \begin{itemize}
+    \item<1->{Expressa no tipo a possibilidade de ausência de valor}
+  \end{itemize}
+  \begin{lstlisting}[escapeinside=`']
+    auto vec_1 = vector<boost::optional<double>> {
+      30.0,
+      {},
+      33.5
+    };
+  \end{lstlisting}
+
+  % \pause
+
+  % \begin{lstlisting}[escapeinside=`']
+  %   //precondition: value eh um valor valido
+  %   void use_value(double value) { /*...*/ }
+  % \end{lstlisting}
+
+  \begin{onlyenv}<2-3>
+  \begin{lstlisting}[escapeinside=`']
+    use_value(vec_1[i]); `\visible<3>{\alert{//Ótimo. Erro de compilação.}}'
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{itemize}
+    \item<3>{Compilador notifica que o nulo deve ser tratado}
+  \end{itemize}
+
+  \begin{onlyenv}<4->
+  \begin{lstlisting}[escapeinside=`']
+    if (vec_1[i]) use_value(*vec_1[i]);
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{itemize}
+    \item<5->{Não é necessário lidar com valores especiais(NaN, INT\_MAX, ...)}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Boost.Optional}
+  \begin{itemize}
+    \item<1->{Ineficiência(no espaço) inviável para container com muitos elementos}
+  \end{itemize}
+  \begin{lstlisting}[escapeinside=`']
+    sizeof(boost::optional<double>>) = 2*sizeof(double>)
+  \end{lstlisting}
+  \begin{itemize}
+    \item<2->{Se double é 8 bytes então boost::optional<double> é 16 bytes!}
+    \item<3->{Compilador alinha a memória da estrutura definida, por exemplo:}
+  \end{itemize}
+
+  \begin{onlyenv}<4-6>
+  \begin{lstlisting}[escapeinside=`']
+    struct optional_double {
+      double value; `\only<5->{\alert{//8 bytes}}'
+      bool _initialized; `\only<6->{\alert{//1 byte}}' 
+    };
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{onlyenv}<7->
+  \begin{lstlisting}[escapeinside=`']
+    struct optional_double {
+      double value; `\alert{//8 bytes}'
+      bool _initialized; `\alert{//1 byte}' 
+      `\alert{char \_pad[7]; //7 bytes}'
+    };
+  \end{lstlisting}
+  \end{onlyenv}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Nullable(ak\_toolkit::markable)}
+  Um ``optional'' com valor nulo definido em compile time
+  \begin{itemize}
+    \item<1->{Nullable é somente uma conveniência para ak\_toolkit::markable}
+      \begin{itemize}
+      \item<2->{Tentativa de um nome mais expressivo}
+      \item<3->{Define valores nulos padrões para integrais e ponto flutuante: numeric\_limits<Int>:max() e NaN.}
+      \end{itemize}
+    \item<4->{Expressividade do boost::optional}
+    \item<5->{Segurança no uso como no boost::optional}
+    \item<6->{Eficiente: sizeof(Nullable<T>) == sizeof(T)}
+  \end{itemize}
+
+  \begin{visibleenv}<7->
+  \begin{lstlisting}[escapeinside=`']
+    auto vec = vector<Nullable<double>> {
+      30.0,
+      Nullable<double>{},
+      33.5
+    };
+  \end{lstlisting}
+  \end{visibleenv}
+
+  \begin{visibleenv}<8->
+  \begin{lstlisting}[escapeinside=`']
+    if (vec[i].has_value()) 
+      use_value(vec[i].value());
+  \end{lstlisting}
+  \end{visibleenv}
+
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Construção com nulos definidos em runtime}
+  Construção do container a partir de fonte externa que utiliza valor nulo definido em runtime
+  \begin{itemize}
+    \item<1->{Não sabemos qual é o valor nulo quando escrevemos o software}
+    \item<2->{Após importação o valor nulo em runtime não é mais necessário para o container}
+    \item<3->{Conveniência toNullable(value, null) para construir Nullable<T>}
+      \begin{itemize}
+      \item<4->{Evita código boilerplate de verificação de nulo}
+      \end{itemize}
+  \end{itemize}
+
+
+  \begin{onlyenv}<5->
+  \begin{lstlisting}[escapeinside=`']
+    (null == value) ? Nullable<T>() : Nullable<T>(value)
+  \end{lstlisting}
+  \end{onlyenv}
+
+  \begin{onlyenv}<6->
+  \begin{lstlisting}[escapeinside=`']
+    double null = -999.25;
+    vec.push_back(toNullable(value, null));
+  \end{lstlisting}
+  \end{onlyenv}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{[Extra] Sentinelas customizadas (MarkPolicy)}
+  Uso de uma policy customizada MarkPolicy para usar um valor de sentinela customizado:
+  \begin{itemize}
+    \item<1->{Permite por exemplo definir valores de mesmo tipo com valores nulos distintos}
+  \end{itemize}
+
+  \begin{onlyenv}<2->
+  \begin{lstlisting}[basicstyle=\small]
+    using NullableIntMin = Nullable<
+      int, 
+      mark_int<int, numeric_limits<int>::min()>
+    >;
+
+    using NullableIntMax = Nullable<
+      int, 
+      mark_int<int, numeric_limits<int>::max()>
+    >;
+  \end{lstlisting}
+  \end{onlyenv}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Referências}
+  \begin{itemize}
+    \item{Boost.Optional \url{http://www.boost.org/doc/libs/release/libs/optional}}
+    \item{\url{https://github.com/akrzemi1/markable}}
+  \end{itemize}
+\end{frame}
+\end{document}
